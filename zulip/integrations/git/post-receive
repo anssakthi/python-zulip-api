@@ -7,13 +7,12 @@
 # stdin in the form
 #  <oldrev> <newrev> <refname>
 # For example:
-#  aa453216d1b3e49e7f6f98441fa56946ddcd6a20 68f7abf4e6f922807889f52bc043ecd31b79f814 refs/heads/master
+#  aa453216d1b3e49e7f6f98441fa56946ddcd6a20 68f7abf4e6f922807889f52bc043ecd31b79f814 refs/heads/main
 
-from typing import Text
 import os
-import sys
-import subprocess
 import os.path
+import subprocess
+import sys
 
 sys.path.insert(0, os.path.dirname(__file__))
 import zulip_git_config as config
@@ -26,18 +25,21 @@ if config.ZULIP_API_PATH is not None:
     sys.path.append(config.ZULIP_API_PATH)
 
 import zulip
+
 client = zulip.Client(
     email=config.ZULIP_USER,
     site=config.ZULIP_SITE,
     api_key=config.ZULIP_API_KEY,
-    client="ZulipGit/" + VERSION)
+    client="ZulipGit/" + VERSION,
+)
 
-def git_repository_name() -> Text:
-    output = subprocess.check_output(["git", "rev-parse", "--is-bare-repository"])
-    if output.strip() == "true":
-        return os.path.basename(os.getcwd())[:-len(".git")]
-    else:
-        return os.path.basename(os.path.dirname(os.getcwd()))
+
+def git_repository_name() -> str:
+    path, name = os.path.split(os.getcwd())
+    if name == ".git":
+        name = os.path.basename(path)
+    return name[: -len(".git")] if name.endswith(".git") else name
+
 
 def git_commit_range(oldrev: str, newrev: str) -> str:
     remote_repo_cmd = ["git", "config", "--get", "remote.origin.url"]
@@ -62,9 +64,10 @@ def git_commit_range(oldrev: str, newrev: str) -> str:
 
     return commits
 
+
 def send_bot_message(oldrev: str, newrev: str, refname: str) -> None:
-    repo_name   = git_repository_name()
-    branch      = refname.replace('refs/heads/', '')
+    repo_name = git_repository_name()
+    branch = refname.replace("refs/heads/", "")
     destination = config.commit_notice_destination(repo_name, branch, newrev)
     if destination is None:
         # Don't forward the notice anywhere
@@ -75,10 +78,10 @@ def send_bot_message(oldrev: str, newrev: str, refname: str) -> None:
 
     if oldrev == EMPTY_SHA or newrev == EMPTY_SHA:
         # New branch pushed or old branch removed
-        added = ''
-        removed = ''
+        added = ""
+        removed = ""
     else:
-        added   = git_commit_range(oldrev, newrev)
+        added = git_commit_range(oldrev, newrev)
         removed = git_commit_range(newrev, oldrev)
 
     if oldrev == EMPTY_SHA:
@@ -86,15 +89,15 @@ def send_bot_message(oldrev: str, newrev: str, refname: str) -> None:
     elif newrev == EMPTY_SHA:
         message = 'branch `%s` was removed (was `%s`)' % (branch, old_head)
     elif removed:
-        message = '`%s` was pushed to `%s`, **REMOVING**:\n\n%s' % (new_head, branch, removed)
+        message = f"`{new_head}` was pushed to `{branch}`, **REMOVING**:\n\n{removed}"
         if added:
-            message += '\n**and adding**:\n\n' + added
-        message += '\n**A HISTORY REWRITE HAS OCCURRED!**'
-        message += '\n@everyone: Please check your local branches to deal with this.'
+            message += "\n**and adding**:\n\n" + added
+        message += "\n**A HISTORY REWRITE HAS OCCURRED!**"
+        message += "\n@everyone: Please check your local branches to deal with this."
     elif added:
-        message = '`%s` was deployed to `%s` with:\n\n%s' % (new_head, branch, added)
+        message = f"`{new_head}` was deployed to `{branch}` with:\n\n{added}"
     else:
-        message = '`%s` was pushed to `%s`... but nothing changed?' % (new_head, branch)
+        message = f"`{new_head}` was pushed to `{branch}`... but nothing changed?"
 
     message_data = {
         "type": "stream",
@@ -103,6 +106,7 @@ def send_bot_message(oldrev: str, newrev: str, refname: str) -> None:
         "content": message,
     }
     client.send_message(message_data)
+
 
 for ln in sys.stdin:
     oldrev, newrev, refname = ln.strip().split()

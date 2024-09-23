@@ -1,3 +1,8 @@
+import os
+from typing import Optional
+
+import platformdirs
+
 # Change these values to configure authentication for your codebase account
 # Note that this is the Codebase API Username, found in the Settings page
 # for your account
@@ -23,15 +28,15 @@ ZULIP_TICKETS_STREAM_NAME = "tickets"
 
 # If properly installed, the Zulip API should be in your import
 # path, but if not, set a custom path below
-ZULIP_API_PATH = None
+ZULIP_API_PATH: Optional[str] = None
 
 # Set this to your Zulip API server URI
 ZULIP_SITE = "https://zulip.example.com"
 
 # If you wish to log to a file rather than stdout/stderr,
 # please fill this out your desired path
-LOG_FILE = None
+LOG_FILE: Optional[str] = None
 
 # This file is used to resume this mirror in case the script shuts down.
 # It is required and needs to be writeable.
-RESUME_FILE = "/var/tmp/zulip_codebase.state"
+RESUME_FILE = os.path.join(platformdirs.user_state_dir(), "zulip_codebase.state")

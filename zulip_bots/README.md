@@ -13,7 +13,6 @@ https://chat.zulip.org/api/writing-bots).
 zulip_bots  # This directory
 ├───zulip_bots  # `zulip_bots` package.
 │   ├───bots/  # Actively maintained and tested bots.
-│   ├───bots_unmaintained/  # Unmaintained, potentially broken bots.
 │   ├───game_handler.py  # Handles game-related bots.
 │   ├───lib.py  # Backbone of run.py
 │   ├───provision.py  # Creates a development environment.
@@ -21,6 +20,6 @@ zulip_bots  # This directory
 │   ├───simple_lib.py  # Used for terminal testing.
 │   ├───test_lib.py  # Backbone for bot unit tests.
 │   ├───test_run.py  # Unit tests for run.py
-│   └───terminal.py  # Used to test bots in the command line.
+│   └───bot_shell.py  # Used to test bots in the command line.
 └───setup.py  # Script for packaging.
 ```

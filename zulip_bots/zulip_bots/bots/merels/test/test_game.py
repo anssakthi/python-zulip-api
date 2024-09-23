@@ -1,9 +1,9 @@
 import unittest
 
-from libraries import game
-from libraries import database
+from zulip_bots.bots.merels.libraries import database, game
+from zulip_bots.game_handler import BadMoveError
 from zulip_bots.simple_lib import SimpleStorage
-from zulip_bots.game_handler import BadMoveException
+
 
 class GameTest(unittest.TestCase):
     def setUp(self):
@@ -25,7 +25,7 @@ class GameTest(unittest.TestCase):
     def test_not_possible_put_piece_output(self):
         merels = database.MerelsStorage(self.topic_name, self.storage)
         merels.update_game(self.topic_name, "X", 0, 0, "NNNNNNNNNNNNNNNNNNNNNNNN", "", 0)
-        with self.assertRaises(BadMoveException) as warning:
+        with self.assertRaises(BadMoveError) as warning:
             game.beat("put 0,1", self.topic_name, self.storage)
             self.assertTrue("Failed" in str(warning))
 
@@ -33,7 +33,7 @@ class GameTest(unittest.TestCase):
         merels = database.MerelsStorage(self.topic_name, self.storage)
         merels.update_game(self.topic_name, "X", 0, 0, "NNNNNNNNNNNNNNNNNNNNNNNN", "", 0)
         merels.update_game(self.topic_name, "X", 0, 0, "XXXNNNOOOXXXNNNOOOXXXNNN", "", 1)
-        with self.assertRaises(BadMoveException) as warning:
+        with self.assertRaises(BadMoveError) as warning:
             game.beat("put 1,1", self.topic_name, self.storage)
             self.assertTrue("Take is required" in str(warning))
 
@@ -48,7 +48,7 @@ class GameTest(unittest.TestCase):
         merels = database.MerelsStorage(self.topic_name, self.storage)
         merels.update_game(self.topic_name, "X", 0, 0, "NNNNNNNNNNNNNNNNNNNNNNNN", "", 0)
         merels.update_game(self.topic_name, "X", 0, 0, "XXXNNNOOOXXXNNNOOOXXXOOO", "", 0)
-        with self.assertRaises(BadMoveException) as warning:
+        with self.assertRaises(BadMoveError) as warning:
             game.beat("move 0,3 1,2", self.topic_name, self.storage)
             self.assertTrue("Failed" in str(warning))
 
@@ -63,7 +63,7 @@ class GameTest(unittest.TestCase):
         merels = database.MerelsStorage(self.topic_name, self.storage)
         merels.update_game(self.topic_name, "X", 0, 0, "NNNNNNNNNNNNNNNNNNNNNNNN", "", 0)
         merels.update_game(self.topic_name, "X", 6, 6, "XXXNNNOOONNNNNNNNNNNNNNN", "", 1)
-        with self.assertRaises(BadMoveException) as warning:
+        with self.assertRaises(BadMoveError) as warning:
             game.beat("move 0,1 1,3", self.topic_name, self.storage)
             self.assertTrue("Take is required" in str(warning))
 
@@ -71,7 +71,7 @@ class GameTest(unittest.TestCase):
         merels = database.MerelsStorage(self.topic_name, self.storage)
         merels.update_game(self.topic_name, "X", 0, 0, "NNNNNNNNNNNNNNNNNNNNNNNN", "", 0)
         merels.update_game(self.topic_name, "X", 6, 6, "XXXNNNOOONNNNNNNNNNNNNNN", "", 1)
-        with self.assertRaises(BadMoveException) as warning:
+        with self.assertRaises(BadMoveError) as warning:
             game.beat("magic 2,2", self.topic_name, self.storage)
             self.assertTrue("Unknown command" in str(warning))
 
@@ -86,7 +86,7 @@ class GameTest(unittest.TestCase):
         merels = database.MerelsStorage(self.topic_name, self.storage)
         merels.update_game(self.topic_name, "X", 0, 0, "NNNNNNNNNNNNNNNNNNNNNNNN", "", 0)
         merels.update_game(self.topic_name, "X", 6, 6, "XXXNNNOOOXXXNNNOOOXXXOOO", "", 0)
-        with self.assertRaises(BadMoveException) as warning:
+        with self.assertRaises(BadMoveError) as warning:
             game.beat("take 2,2", self.topic_name, self.storage)
             self.assertTrue("Taking is not possible" in str(warning))
 

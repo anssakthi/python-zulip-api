@@ -2,15 +2,13 @@
 mechanisms as well as some functions for accessing the database.
 """
 
+from collections import Counter
 from math import sqrt
 
-from collections import Counter
+from zulip_bots.game_handler import BadMoveError
 
-from . import constants
-from . import database
-from . import game_data
-from . import interface
-from zulip_bots.game_handler import BadMoveException
+from . import constants, database, game_data, interface
+
 
 def is_in_grid(vertical_pos, horizontal_pos):
     """Checks whether the cell actually exists or not
@@ -54,20 +52,19 @@ def is_jump(vpos_before, hpos_before, vpos_after, hpos_after):
         False, if it is not jumping
     """
 
-    distance = sqrt(
-        (vpos_after - vpos_before) ** 2 + (hpos_after - hpos_before) ** 2)
+    distance = sqrt((vpos_after - vpos_before) ** 2 + (hpos_after - hpos_before) ** 2)
 
     # If the man is in outer square, the distance must be 3 or 1
     if [vpos_before, hpos_before] in constants.OUTER_SQUARE:
-        return not (distance == 3 or distance == 1)
+        return distance not in (3, 1)
 
     # If the man is in middle square, the distance must be 2 or 1
     if [vpos_before, hpos_before] in constants.MIDDLE_SQUARE:
-        return not (distance == 2 or distance == 1)
+        return distance not in (2, 1)
 
     # If the man is in inner square, the distance must be only 1
     if [vpos_before, hpos_before] in constants.INNER_SQUARE:
-        return not (distance == 1)
+        return distance != 1
 
 
 def get_hills_numbers(grid):
@@ -85,9 +82,9 @@ def get_hills_numbers(grid):
         v1, h1 = hill[0][0], hill[0][1]
         v2, h2 = hill[1][0], hill[1][1]
         v3, h3 = hill[2][0], hill[2][1]
-        if all(x == "O" for x in
-               (grid[v1][h1], grid[v2][h2], grid[v3][h3])) or all(
-                x == "X" for x in (grid[v1][h1], grid[v2][h2], grid[v3][h3])):
+        if all(x == "O" for x in (grid[v1][h1], grid[v2][h2], grid[v3][h3])) or all(
+            x == "X" for x in (grid[v1][h1], grid[v2][h2], grid[v3][h3])
+        ):
             relative_hills += str(k)
 
     return relative_hills
@@ -150,14 +147,14 @@ def is_legal_move(v1, h1, v2, h2, turn, phase, grid):
         return False  # Place all the pieces first before moving one
 
     if phase == 3 and get_piece(turn, grid) == 3:
-        return is_in_grid(v2, h2) and is_empty(v2, h2, grid) and is_own_piece(
-            v1, h1, turn, grid)
+        return is_in_grid(v2, h2) and is_empty(v2, h2, grid) and is_own_piece(v1, h1, turn, grid)
 
-    return is_in_grid(v2, h2) and is_empty(v2, h2, grid) and (
-        not is_jump(v1, h1, v2, h2)) and is_own_piece(v1,
-                                                      h1,
-                                                      turn,
-                                                      grid)
+    return (
+        is_in_grid(v2, h2)
+        and is_empty(v2, h2, grid)
+        and not is_jump(v1, h1, v2, h2)
+        and is_own_piece(v1, h1, turn, grid)
+    )
 
 
 def is_own_piece(v, h, turn, grid):
@@ -197,8 +194,12 @@ def is_legal_take(v, h, turn, grid, take_mode):
     :return: True if it is legal, False if it is not legal
     """
 
-    return is_in_grid(v, h) and not is_empty(v, h, grid) and not is_own_piece(
-        v, h, turn, grid) and take_mode == 1
+    return (
+        is_in_grid(v, h)
+        and not is_empty(v, h, grid)
+        and not is_own_piece(v, h, turn, grid)
+        and take_mode == 1
+    )
 
 
 def get_piece(turn, grid):
@@ -241,8 +242,7 @@ def who_won(topic_name, merels_storage):
     return "None"
 
 
-def get_phase_number(grid, turn, x_pieces_possessed_not_on_grid,
-                     o_pieces_possessed_not_on_grid):
+def get_phase_number(grid, turn, x_pieces_possessed_not_on_grid, o_pieces_possessed_not_on_grid):
     """Updates current game phase
 
     :param grid: A 2-dimensional 7x7 list
@@ -255,17 +255,15 @@ def get_phase_number(grid, turn, x_pieces_possessed_not_on_grid,
     is "flying"
     """
 
-    if x_pieces_possessed_not_on_grid != 0 or o_pieces_possessed_not_on_grid \
-            != 0:
+    if x_pieces_possessed_not_on_grid != 0 or o_pieces_possessed_not_on_grid != 0:
         # Placing pieces
         return 1
+    elif get_piece("X", grid) <= 3 or get_piece("O", grid) <= 3:
+        # Flying
+        return 3
     else:
-        if get_piece("X", grid) <= 3 or get_piece("O", grid) <= 3:
-            # Flying
-            return 3
-        else:
-            # Moving pieces
-            return 2
+        # Moving pieces
+        return 2
 
 
 def create_room(topic_name, merels_storage):
@@ -279,14 +277,15 @@ def create_room(topic_name, merels_storage):
 
     if merels.create_new_game(topic_name):
         response = ""
-        response += "A room has been created in {0}. Starting game now.\n". \
-            format(topic_name)
+        response += f"A room has been created in {topic_name}. Starting game now.\n"
         response += display_game(topic_name, merels_storage)
 
         return response
     else:
-        return "Failed: Cannot create an already existing game in {}. " \
-               "Please finish the game first.".format(topic_name)
+        return (
+            f"Failed: Cannot create an already existing game in {topic_name}. "
+            "Please finish the game first."
+        )
 
 
 def display_game(topic_name, merels_storage):
@@ -303,15 +302,12 @@ def display_game(topic_name, merels_storage):
 
     response = ""
 
-    if data.take_mode == 1:
-        take = "Yes"
-    else:
-        take = "No"
+    take = "Yes" if data.take_mode == 1 else "No"
 
     response += interface.graph_grid(data.grid()) + "\n"
-    response += """Phase {}. Take mode: {}.
-X taken: {}, O taken: {}.
-    """.format(data.get_phase(), take, data.x_taken, data.o_taken)
+    response += f"""Phase {data.get_phase()}. Take mode: {take}.
+X taken: {data.x_taken}, O taken: {data.o_taken}.
+    """
 
     return response
 
@@ -326,8 +322,7 @@ def reset_game(topic_name, merels_storage):
     merels = database.MerelsStorage(topic_name, merels_storage)
 
     merels.remove_game(topic_name)
-    return "Game removed.\n" + create_room(topic_name,
-                                           merels_storage) + "Game reset.\n"
+    return "Game removed.\n" + create_room(topic_name, merels_storage) + "Game reset.\n"
 
 
 def move_man(topic_name, p1, p2, merels_storage):
@@ -346,8 +341,7 @@ def move_man(topic_name, p1, p2, merels_storage):
     grid = data.grid()
 
     # Check legal move
-    if is_legal_move(p1[0], p1[1], p2[0], p2[1], data.turn, data.get_phase(),
-                     data.grid()):
+    if is_legal_move(p1[0], p1[1], p2[0], p2[1], data.turn, data.get_phase(), data.grid()):
         # Move the man
         move_man_legal(p1[0], p1[1], p2[0], p2[1], grid)
         # Construct the board back from updated grid
@@ -355,13 +349,19 @@ def move_man(topic_name, p1, p2, merels_storage):
         # Insert/update the current board
         data.board = board
         # Update the game data
-        merels.update_game(data.topic_name, data.turn, data.x_taken,
-                           data.o_taken, data.board, data.hill_uid,
-                           data.take_mode)
-        return "Moved a man from ({}, {}) -> ({}, {}) for {}.".format(
-            p1[0], p1[1], p2[0], p2[1], data.turn)
+        merels.update_game(
+            data.topic_name,
+            data.turn,
+            data.x_taken,
+            data.o_taken,
+            data.board,
+            data.hill_uid,
+            data.take_mode,
+        )
+        return f"Moved a man from ({p1[0]}, {p1[1]}) -> ({p2[0]}, {p2[1]}) for {data.turn}."
     else:
-        raise BadMoveException("Failed: That's not a legal move. Please try again.")
+        raise BadMoveError("Failed: That's not a legal move. Please try again.")
+
 
 def put_man(topic_name, v, h, merels_storage):
     """Puts a man into the specified cell in topic_name
@@ -387,12 +387,18 @@ def put_man(topic_name, v, h, merels_storage):
         # Insert/update form current board
         data.board = board
         # Update the game data
-        merels.update_game(data.topic_name, data.turn, data.x_taken,
-                           data.o_taken, data.board, data.hill_uid,
-                           data.take_mode)
-        return "Put a man to ({}, {}) for {}.".format(v, h, data.turn)
+        merels.update_game(
+            data.topic_name,
+            data.turn,
+            data.x_taken,
+            data.o_taken,
+            data.board,
+            data.hill_uid,
+            data.take_mode,
+        )
+        return f"Put a man to ({v}, {h}) for {data.turn}."
     else:
-        raise BadMoveException("Failed: That's not a legal put. Please try again.")
+        raise BadMoveError("Failed: That's not a legal put. Please try again.")
 
 
 def take_man(topic_name, v, h, merels_storage):
@@ -425,12 +431,18 @@ def take_man(topic_name, v, h, merels_storage):
         # Insert/update form current board
         data.board = board
         # Update the game data
-        merels.update_game(data.topic_name, data.turn, data.x_taken,
-                           data.o_taken, data.board, data.hill_uid,
-                           data.take_mode)
-        return "Taken a man from ({}, {}) for {}.".format(v, h, data.turn)
+        merels.update_game(
+            data.topic_name,
+            data.turn,
+            data.x_taken,
+            data.o_taken,
+            data.board,
+            data.hill_uid,
+            data.take_mode,
+        )
+        return f"Taken a man from ({v}, {h}) for {data.turn}."
     else:
-        raise BadMoveException("Failed: That's not a legal take. Please try again.")
+        raise BadMoveError("Failed: That's not a legal take. Please try again.")
 
 
 def update_hill_uid(topic_name, merels_storage):
@@ -446,9 +458,15 @@ def update_hill_uid(topic_name, merels_storage):
 
     data.hill_uid = get_hills_numbers(data.grid())
 
-    merels.update_game(data.topic_name, data.turn, data.x_taken,
-                       data.o_taken, data.board, data.hill_uid,
-                       data.take_mode)
+    merels.update_game(
+        data.topic_name,
+        data.turn,
+        data.x_taken,
+        data.o_taken,
+        data.board,
+        data.hill_uid,
+        data.take_mode,
+    )
 
 
 def update_change_turn(topic_name, merels_storage):
@@ -464,9 +482,15 @@ def update_change_turn(topic_name, merels_storage):
 
     data.switch_turn()
 
-    merels.update_game(data.topic_name, data.turn, data.x_taken,
-                       data.o_taken, data.board, data.hill_uid,
-                       data.take_mode)
+    merels.update_game(
+        data.topic_name,
+        data.turn,
+        data.x_taken,
+        data.o_taken,
+        data.board,
+        data.hill_uid,
+        data.take_mode,
+    )
 
 
 def update_toggle_take_mode(topic_name, merels_storage):
@@ -482,9 +506,15 @@ def update_toggle_take_mode(topic_name, merels_storage):
 
     data.toggle_take_mode()
 
-    merels.update_game(data.topic_name, data.turn, data.x_taken,
-                       data.o_taken, data.board, data.hill_uid,
-                       data.take_mode)
+    merels.update_game(
+        data.topic_name,
+        data.turn,
+        data.x_taken,
+        data.o_taken,
+        data.board,
+        data.hill_uid,
+        data.take_mode,
+    )
 
 
 def get_take_status(topic_name, merels_storage):
@@ -536,11 +566,9 @@ def can_take_mode(topic_name, merels_storage):
 
     updated_hill_uid = get_hills_numbers(updated_grid)
 
-    if current_hill_uid != updated_hill_uid and len(updated_hill_uid) >= len(
-            current_hill_uid):
-        return True
-    else:
-        return False
+    return bool(
+        current_hill_uid != updated_hill_uid and len(updated_hill_uid) >= len(current_hill_uid)
+    )
 
 
 def check_moves(turn, grid):
@@ -551,7 +579,7 @@ def check_moves(turn, grid):
     :return: True, if there is any, False if otherwise
     """
     for hill in constants.HILLS:
-        for k in range(0, 2):
+        for k in range(2):
             g1 = grid[hill[k][0]][hill[k][1]]
             g2 = grid[hill[k + 1][0]][hill[k + 1][1]]
             if (g1 == " " and g2 == turn) or (g2 == " " and g1 == turn):

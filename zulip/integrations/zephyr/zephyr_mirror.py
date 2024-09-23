@@ -1,22 +1,24 @@
 #!/usr/bin/env python3
 
-import sys
-import subprocess
+import asyncio
 import os
-import traceback
 import signal
+import subprocess
+import sys
+import traceback
+from types import FrameType
+from typing import Optional
 
 sys.path[:0] = [os.path.dirname(__file__)]
 from zephyr_mirror_backend import parse_args
 
-(options, args) = parse_args()
+options, args = parse_args()
 
-from types import FrameType
 
-def die(signal: int, frame: FrameType) -> None:
-
+def die(signal: int, frame: Optional[FrameType]) -> None:
     # We actually want to exit, so run os._exit (so as not to be caught and restarted)
     os._exit(1)
+
 
 signal.signal(signal.SIGINT, die)
 
@@ -30,19 +32,22 @@ if options.sync_subscriptions:
     sys.exit(0)
 
 if options.forward_class_messages and not options.noshard:
-    # Needed to get access to zephyr.lib.parallel
-    sys.path.append("/home/zulip/zulip")
     if options.on_startup_command is not None:
         subprocess.call([options.on_startup_command])
-    from zerver.lib.parallel import run_parallel
-    print("Starting parallel zephyr class mirroring bot")
-    jobs = list("0123456789abcdef")
 
-    def run_job(shard: str) -> int:
-        subprocess.call(args + ["--shard=%s" % (shard,)])
-        return 0
-    for (status, job) in run_parallel(run_job, jobs, threads=16):
-        print("A mirroring shard died!")
+    print("Starting parallel zephyr class mirroring bot")
+    shards = list("0123456789abcdef")
+
+    async def run_shard(shard: str) -> int:
+        process = await asyncio.create_subprocess_exec(*args, f"--shard={shard}")
+        return await process.wait()
+
+    async def run_shards() -> None:
+        for coro in asyncio.as_completed(map(run_shard, shards)):
+            await coro
+            print("A mirroring shard died!")
+
+    asyncio.run(run_shards())
     sys.exit(0)
 
 backoff = RandomExponentialBackoff(timeout_success_equivalent=300)
