@@ -57,7 +57,7 @@ def git_commit_range(oldrev: str, newrev: str) -> str:
             author_name=author_name,
             commit_short_hash=commit_short_hash,
             subject=subject,
-            commit_url="{}/commit/{}".format(remote_repo_url, commit_hash)
+            commit_url=f"{remote_repo_url}/commit/{commit_hash}", 
         )
 
     return commits
